@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# IDE and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Vi/Vim swap files
+.*.sw[op]
+*.sw[op]
+
+# Application logs
+/tmp/rig-macros-error.log
+*.log
+
+# Generated TTS files (temporary)
+/tmp/tts_*.wav
+/tmp/tts_*_pitched.wav
+
+# Piper TTS models
+*.onnx
+*.onnx.json

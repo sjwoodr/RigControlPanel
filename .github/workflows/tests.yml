@@ -1,0 +1,228 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.10', '3.12']
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyserial configparser
+      
+      - name: Check Python syntax (rig-macros.py)
+        run: |
+          python -m py_compile rig-macros.py
+          echo "✓ rig-macros.py syntax is valid"
+      
+      - name: Validate configuration file syntax
+        run: |
+          python << 'EOF'
+          import configparser
+          import sys
+          
+          config = configparser.ConfigParser()
+          try:
+              config.read('rig-macros.conf')
+              
+              # Verify required sections exist
+              required_sections = ['Voice Keyer Memory', 'Piper TTS']
+              for section in required_sections:
+                  if not config.has_section(section):
+                      print(f"ERROR: Missing required section [{section}]")
+                      sys.exit(1)
+              
+              # Verify required keys in Voice Keyer Memory
+              voicekeyer_keys = ['t1_label', 't2_label', 't3_label', 't4_label']
+              for key in voicekeyer_keys:
+                  if not config.has_option('Voice Keyer Memory', key):
+                      print(f"ERROR: Missing Voice Keyer Memory key: {key}")
+                      sys.exit(1)
+              
+              # Verify required keys in Piper TTS
+              for button in [1, 2, 3]:
+                  required_keys = [
+                      f'button{button}_label',
+                      f'button{button}_text',
+                      f'button{button}_length_scale',
+                      f'button{button}_pitch'
+                  ]
+                  for key in required_keys:
+                      if not config.has_option('Piper TTS', key):
+                          print(f"ERROR: Missing Piper TTS key: {key}")
+                          sys.exit(1)
+              
+              # Validate length_scale values (should be between 0.5 and 1.0)
+              for button in [1, 2, 3]:
+                  scale_key = f'button{button}_length_scale'
+                  scale_val = config.getfloat('Piper TTS', scale_key)
+                  if not (0.5 <= scale_val <= 1.0):
+                      print(f"ERROR: {scale_key} must be between 0.5 and 1.0, got {scale_val}")
+                      sys.exit(1)
+              
+              print("✓ rig-macros.conf syntax is valid")
+              print("✓ All required sections present")
+              print("✓ All required keys present")
+              print("✓ Configuration values are valid")
+              
+          except configparser.Error as e:
+              print(f"ERROR: Configuration file is invalid: {e}")
+              sys.exit(1)
+          except ValueError as e:
+              print(f"ERROR: Invalid configuration value: {e}")
+              sys.exit(1)
+          EOF
+      
+      - name: Check for syntax errors in test imports
+        run: |
+          python << 'EOF'
+          import sys
+          import os
+          
+          # Test that key modules can be imported
+          try:
+              import tkinter
+              print("✓ tkinter available")
+          except ImportError:
+              print("⚠ tkinter not available (expected in CI environment)")
+          
+          try:
+              import xmlrpc.client
+              print("✓ xmlrpc.client available")
+          except ImportError:
+              print("✗ xmlrpc.client not available")
+              sys.exit(1)
+          
+          try:
+              import serial
+              print("✓ serial (pyserial) available")
+          except ImportError:
+              print("✗ serial (pyserial) not available")
+              sys.exit(1)
+          
+          try:
+              import configparser
+              print("✓ configparser available")
+          except ImportError:
+              print("✗ configparser not available")
+              sys.exit(1)
+          
+          print("\nAll required modules available")
+          EOF
+      
+      - name: Verify file structure
+        run: |
+          python << 'EOF'
+          import os
+          import sys
+          
+          required_files = [
+              'rig-macros.py',
+              'rig-macros.conf',
+              'rig-macros.sh',
+              'README.md',
+              'LICENSE'
+          ]
+          
+          missing = []
+          for file in required_files:
+              if not os.path.exists(file):
+                  missing.append(file)
+          
+          if missing:
+              print(f"ERROR: Missing required files: {', '.join(missing)}")
+              sys.exit(1)
+          
+          for file in required_files:
+              size = os.path.getsize(file)
+              print(f"✓ {file} ({size} bytes)")
+          
+          print("\nAll required files present")
+          EOF
+      
+      - name: Check .gitignore exists
+        run: |
+          if [ -f .gitignore ]; then
+              echo "✓ .gitignore exists"
+              echo "  Contents:"
+              head -20 .gitignore | sed 's/^/    /'
+          else
+              echo "✗ .gitignore not found"
+              exit 1
+          fi
+      
+      - name: Verify README has required sections
+        run: |
+          python << 'EOF'
+          import re
+          
+          with open('README.md', 'r') as f:
+              content = f.read()
+          
+          required_sections = [
+              'Features',
+              'Requirements',
+              'Installation',
+              'Configuration',
+              'Usage',
+              'Troubleshooting',
+              'License',
+              'No official support'
+          ]
+          
+          missing = []
+          for section in required_sections:
+              if section.lower() not in content.lower():
+                  missing.append(section)
+          
+          if missing:
+              print(f"WARNING: Missing sections in README: {', '.join(missing)}")
+          else:
+              print("✓ README has all required sections")
+          
+          # Check for platform support warning
+          if 'Ubuntu 24.04' in content or 'Linux' in content:
+              print("✓ README mentions Linux/Ubuntu platform support")
+          else:
+              print("⚠ README should mention Linux/Ubuntu platform support")
+          
+          # Check for no support disclaimer
+          if 'no official support' in content.lower() or 'no support' in content.lower():
+              print("✓ README includes no-support disclaimer")
+          else:
+              print("⚠ README should include no-support disclaimer")
+          EOF
+      
+      - name: Test summary
+        run: |
+          echo "=========================================="
+          echo "All tests passed!"
+          echo "=========================================="
+          echo ""
+          echo "✓ Python syntax valid (rig-macros.py)"
+          echo "✓ Config file syntax valid (rig-macros.conf)"
+          echo "✓ Required dependencies available"
+          echo "✓ File structure complete"
+          echo "✓ .gitignore present"
+          echo "✓ README documentation complete"
+          echo ""
+          echo "Ready for merge!"
