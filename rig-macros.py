@@ -296,8 +296,6 @@ try:
     split_indicator = tk.Label(top_frame, width=2, height=1, bg="gray", relief=tk.SUNKEN, bd=1)
     split_indicator.pack(side=tk.LEFT, padx=(5, 0))
 
-
-    # CW Band Frame
     cw_frame = tk.LabelFrame(root, text="CW", padx=10, pady=10, bd=2, relief=tk.GROOVE)
     cw_frame.pack(padx=10, pady=5)
 
@@ -345,6 +343,64 @@ try:
         timestamp = datetime.now().strftime("%H:%M:%S")
         debug_queue.put(f"[{timestamp}] {message}")
     
+     
+    # PTT Button (momentary switch - acts like a footswitch)
+    # Use a Label instead of Button for better event handling
+    ppt_active = False
+    
+    def ppt_press(event):
+        global ppt_active
+        if ppt_active:
+            return
+        ppt_active = True
+        try:
+            if not serial_port or not serial_port.is_open:
+                status_var.set("PTT error: Serial port not available")
+                add_debug("PTT press error: Serial port not available")
+                ppt_active = False
+                return
+            
+            serial_port.rts = True
+            ppt_label.config(bg="red", fg="white", activebackground="darkred", activeforeground="white")
+            ppt_label.update()  # Force immediate visual update
+            status_var.set("PTT ON")
+            add_debug("PTT engaged - RTS raised, radio keyed")
+        except Exception as e:
+            status_var.set(f"PTT error: {e}")
+            add_debug(f"PTT press error: {e}")
+            print(f"PTT press error: {e}", file=sys.stderr)
+            ppt_active = False
+    
+    def ppt_release(event):
+        global ppt_active
+        if not ppt_active:
+            return
+        ppt_active = False
+        try:
+            if serial_port and serial_port.is_open:
+                serial_port.rts = False
+            ppt_label.config(bg=ppt_default_bg, fg=ppt_default_fg, activebackground=ppt_default_bg, activeforeground=ppt_default_fg)
+            ppt_label.update()  # Force immediate visual update
+            status_var.set("PTT OFF")
+            add_debug("PTT released - RTS lowered, radio unkeyed")
+        except Exception as e:
+            status_var.set(f"PTT error: {e}")
+            add_debug(f"PTT release error: {e}")
+            print(f"PTT release error: {e}", file=sys.stderr)
+    
+    # Use Button widget for PTT (same as Split button styling)
+    ppt_label = tk.Button(top_frame, text=" PTT ", command=lambda: None, takefocus=False)
+    ppt_label.pack(side=tk.LEFT, padx=5, pady=0)
+    
+    # Store PTT default colors
+    ppt_default_bg = ppt_label.cget("background")
+    ppt_default_fg = ppt_label.cget("foreground")
+    
+    # Bind mouse events to Button
+    ppt_label.bind("<Button-1>", ppt_press)
+    ppt_label.bind("<ButtonRelease-1>", ppt_release)
+    ppt_label.bind("<Leave>", ppt_release)
+
     # Function to process debug queue and update text widget
     def process_debug_queue():
         try:
@@ -1029,21 +1085,10 @@ try:
             debug_frame.pack_forget()
             btn_debug_toggle.config(text="▶ Show Debug")
             debug_visible = False
-            # Restore original window size
-            if original_geometry:
-                root.geometry(original_geometry)
         else:
-            # Save current window size before expanding
-            root.update_idletasks()
-            original_geometry = root.geometry()
-            debug_frame.pack(padx=10, pady=5, fill=tk.BOTH, expand=True)
+            debug_frame.pack(padx=10, pady=5, fill=tk.X)
             btn_debug_toggle.config(text="▼ Hide Debug")
             debug_visible = True
-            # Expand window to show debug section
-            root.update_idletasks()
-            width = root.winfo_width()
-            height = root.winfo_height() + 250  # Add space for debug section
-            root.geometry(f"{width}x{height}")
     
     # Toggle button for debug section
     btn_debug_toggle = tk.Button(root, text="▶ Show Debug", command=toggle_debug, 
@@ -1058,7 +1103,7 @@ try:
     
     debug_text = scrolledtext.ScrolledText(debug_frame, height=10, width=80, wrap=tk.WORD, 
                                            bg="#f0f0f0", font=("Courier", 9))
-    debug_text.pack(fill=tk.BOTH, expand=True)
+    debug_text.pack(fill=tk.X)
     
     # Clear debug button
     def clear_debug():
